@@ -4,6 +4,7 @@ import com.rabbit.rabbitmqsb.common.MQMsg;
 import com.rabbit.rabbitmqsb.config.CallBackerSender;
 import org.springframework.amqp.core.AmqpTemplate;
 import org.springframework.amqp.core.Message;
+import org.springframework.amqp.core.MessageProperties;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.amqp.rabbit.support.CorrelationData;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -23,6 +24,9 @@ public class TestMQController implements RabbitTemplate.ConfirmCallback, RabbitT
     @Autowired
     private CallBackerSender callBackerSender;
 
+    @Autowired
+    private RabbitTemplate rabbitTemplate;
+
     @RequestMapping("hellorabbitmq")
     public void send() {
         String context = "hello rabbitmq";
@@ -32,13 +36,18 @@ public class TestMQController implements RabbitTemplate.ConfirmCallback, RabbitT
     @RequestMapping("mysql")
     public void send1() {
         String context = "保存到数据库";
-        this.amqpTemplate.convertAndSend(MQMsg.EXCHANGE, "test.msq", context);
+        //CorrelationData用于confirm机制里的回调确认
+        CorrelationData correlationData = new CorrelationData(UUID.randomUUID().toString());
+//        rabbitTemplate.convertAndSend(exchange,routingKey,JSON.toJSONString(object),correlationData);
+        this.rabbitTemplate.convertAndSend(MQMsg.EXCHANGE, "test.msq",context,correlationData);
     }
 
     @RequestMapping("email")
     public void send2() {
         String context = "为用户发送邮件";
-        this.amqpTemplate.convertAndSend(MQMsg.EXCHANGE, "test.eml", context);
+        CorrelationData correlationData = new CorrelationData(UUID.randomUUID().toString());
+//        this.amqpTemplate.convertAndSend(MQMsg.EXCHANGE, "test.eml", context);
+        this.rabbitTemplate.convertAndSend(MQMsg.EXCHANGE, "test.eml",context,correlationData);
     }
 
     @RequestMapping("other")
@@ -47,6 +56,37 @@ public class TestMQController implements RabbitTemplate.ConfirmCallback, RabbitT
         this.amqpTemplate.convertAndSend(MQMsg.EXCHANGE, "test.#", context);
     }
 
+    /**
+     * 延时队列测试
+     */
+    @RequestMapping("delayed")
+    public void delayed() {
+        sendToDeadQueue20();
+
+    }
+
+    public void sendToDeadQueue20() {
+        sendToDeadQueue(1);
+//        sendToDeadQueue(2);
+//        sendToDeadQueue(3);
+//        sendToDeadQueue(4);
+//        sendToDeadQueue(5);
+//        sendToDeadQueue(6);
+//        sendToDeadQueue(7);
+//        sendToDeadQueue(8);
+//        sendToDeadQueue(9);
+//        sendToDeadQueue(10);
+    }
+
+    public void sendToDeadQueue(Integer expire) {
+        CorrelationData correlationData = new CorrelationData(UUID.randomUUID().toString());
+        MessageProperties messageProperties = new MessageProperties();
+        messageProperties.setDelay(expire * 1000);
+        messageProperties.setContentType("json");
+
+        Message message = new Message(("测试" + expire).getBytes(), messageProperties);
+        rabbitTemplate.convertAndSend(MQMsg.DELAYED_EXCHANGE_NAME, "test.delayed", message,correlationData);
+    }
 
     @RequestMapping("callback")
     public void send4() {
